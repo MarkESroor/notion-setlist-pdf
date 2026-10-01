@@ -9,7 +9,7 @@ from generate_setlist import (
 
 st.set_page_config(page_title="Setlist PDF", layout="centered")
 st.title("Setlist PDF")
-st.write("Choose a date or event to generate a fresh PDF.")
+st.write("Choose a date or event to generate a pdf with the hymns sorted in order. Ma7abba God Bless")
 
 try:
     properties = notion.data_sources.retrieve(data_source_id=DATA_SOURCE_ID)["properties"]
