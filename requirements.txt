@@ -1,0 +1,7 @@
+notion-client
+python-dotenv
+requests
+reportlab==5.0.1
+arabic-reshaper
+python-bidi==0.4.2
+streamlit
