@@ -5,6 +5,5 @@ reportlab==5.0.1
 arabic-reshaper
 python-bidi==0.4.2
 # Web runtime versions verified with the export and browser checks.
-streamlit==1.64.0
-starlette==1.7.0
-uvicorn==0.54.0
+streamlit==1.56.0
+tornado==6.6
