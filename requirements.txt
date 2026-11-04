@@ -4,4 +4,6 @@ requests
 reportlab==5.0.1
 arabic-reshaper
 python-bidi==0.4.2
-streamlit
+streamlit==1.64.0
+starlette==1.7.0
+uvicorn==0.54.0
