@@ -66,6 +66,14 @@ def get_text(prop):
         return ""
 
 
+def get_song_name(page):
+    props = page["properties"]
+    return get_text(props.get("Arabic Name", {})) or next((
+        "".join(part.get("plain_text", "") for part in prop["title"])
+        for prop in props.values() if prop.get("title")
+    ), "Untitled song")
+
+
 def get_image_urls_from_page(page_id, depth=0, max_depth=3):
     if depth > max_depth:
         return []
@@ -107,16 +115,20 @@ def download_one(page_id, url):
     return page_id, buf
 
 
-def fetch_all_images(pages):
+def fetch_all_images(pages, selected_images=None):
     print("Fetching block lists...")
 
     all_tuples = []
 
     for page in pages:
-        urls = get_image_urls_from_page(page["id"])
-
-        if urls:
-            all_tuples.append(urls[0])  # first image only
+        urls = page.get("image_urls")
+        if urls is None:
+            urls = [url for _, url in get_image_urls_from_page(page["id"])]
+        indices = ([0] if urls else []) if selected_images is None else selected_images.get(page["id"], [])
+        for index in sorted(set(indices)):
+            if type(index) is not int or not 0 <= index < len(urls):
+                raise ValueError("An image selection is no longer available. Reload the songs.")
+            all_tuples.append((page["id"], index, urls[index]))
 
     print(f"Downloading {len(all_tuples)} images in parallel...")
 
@@ -124,19 +136,22 @@ def fetch_all_images(pages):
 
     with ThreadPoolExecutor(max_workers=8) as executor:
         futures = {
-            executor.submit(download_one, pid, url): pid
-            for pid, url in all_tuples
+            executor.submit(download_one, pid, url): (pid, index)
+            for pid, index, url in all_tuples
         }
 
         for i, f in enumerate(as_completed(futures), 1):
             try:
-                page_id, buf = f.result()
-                results.setdefault(page_id, []).append(buf)
+                _, buf = f.result()
+                page_id, index = futures[f]
+                results.setdefault(page_id, {})[index] = buf
                 print(f"  [{i}/{len(all_tuples)}] downloaded")
             except Exception as e:
+                if selected_images is not None:
+                    raise RuntimeError("Could not download a selected chord image. Please try again.") from e
                 print(f"  [Download failed: {e}]")
 
-    return results
+    return {pid: [images[index] for index in sorted(images)] for pid, images in results.items()}
 
 
 def build_pdf(pages, image_cache, output_path="setlist.pdf"):
@@ -178,7 +193,8 @@ def build_pdf(pages, image_cache, output_path="setlist.pdf"):
         images = image_cache.get(page["id"], [])
 
         if not images:
-            story.append(Paragraph("[No chord image found]", styles["Normal"]))
+            message = "[No chord images selected]" if page.get("image_urls") else "[No chord image found]"
+            story.append(Paragraph(message, styles["Normal"]))
         else:
             for buf in images:
                 try:
@@ -194,7 +210,7 @@ def build_pdf(pages, image_cache, output_path="setlist.pdf"):
     print(f"\nDone! PDF saved to {output_path}")
 
 
-def generate_setlist(date_filter, output_path, event_filter=None):
+def get_setlist_pages(date_filter, event_filter=None):
     filters = [
         {"property": name, "multi_select": {"contains": value.strip()}}
         for name, value in ((DATE_PROPERTY, date_filter), (EVENT_PROPERTY, event_filter))
@@ -216,8 +232,23 @@ def generate_setlist(date_filter, output_path, event_filter=None):
     if not pages:
         raise NoSongsFound("No songs match those filters. Try a different date or event.")
 
-    image_cache = fetch_all_images(pages)
+    return pages
+
+
+def prepare_setlist(date_filter, event_filter=None):
+    return [
+        {**page, "image_urls": [url for _, url in get_image_urls_from_page(page["id"])]}
+        for page in get_setlist_pages(date_filter, event_filter)
+    ]
+
+
+def export_setlist(pages, output_path, selected_images=None):
+    image_cache = fetch_all_images(pages, selected_images)
     build_pdf(pages, image_cache, output_path=output_path)
+
+
+def generate_setlist(date_filter, output_path, event_filter=None):
+    export_setlist(get_setlist_pages(date_filter, event_filter), output_path)
 
 
 if __name__ == "__main__":

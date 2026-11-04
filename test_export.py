@@ -46,6 +46,8 @@ def check():
         web.selectbox[1].select("Conv 2 - Omseya")
         web.button[0].click().run()
         assert not web.exception
+        assert len(web.get("download_button")) == 0
+        web.button(key="generate_pdf").click().run()
         assert len(web.get("download_button")) == 1
         assert query.call_args.kwargs["filter"] == event_filter
         web.selectbox[0].select("10/6/26")
@@ -60,3 +62,4 @@ def check():
 
 if __name__ == "__main__":
     check()
+
