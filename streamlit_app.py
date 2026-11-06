@@ -21,13 +21,15 @@ def load_choices():
     return dates, events
 
 
-def move_song(page_id, direction):
+def move_song(page_id):
     pages = st.session_state["setlist"]
     index = next(i for i, page in enumerate(pages) if page["id"] == page_id)
-    destination = index + direction
-    if 0 <= destination < len(pages):
-        pages[index], pages[destination] = pages[destination], pages[index]
+    destination = st.session_state[f"position_{page_id}"] - 1
+    if destination != index:
+        pages.insert(destination, pages.pop(index))
         invalidate_pdf()
+    for position, page in enumerate(pages, 1):
+        st.session_state[f"position_{page['id']}"] = position
 
 
 st.set_page_config(page_title="Setlist PDF", layout="centered")
@@ -62,7 +64,7 @@ if st.button("Load songs", key="load_songs", type="primary", width="stretch"):
             st.session_state["setlist"] = pages
             st.session_state["loaded_filters"] = filters
             for key in list(st.session_state):
-                if key.startswith("image_"):
+                if key.startswith(("image_", "position_")):
                     del st.session_state[key]
         except NoSongsFound as error:
             st.error(str(error))
@@ -73,17 +75,16 @@ if st.button("Load songs", key="load_songs", type="primary", width="stretch"):
 pages = st.session_state.get("setlist")
 if pages:
     st.subheader("Review your setlist")
-    st.caption("Use the arrows to change song order. The first image is checked by default; select any extras you want.")
+    st.caption("Type a song position to change its order. The first image is checked by default; select any extras you want.")
     for position, page in enumerate(pages):
         page_id = page["id"]
         name = get_song_name(page)
         with st.container(border=True):
             st.write(f"{position + 1}. {name}")
-            up, down = st.columns(2)
-            up.button("↑ Move up", key=f"up_{page_id}", disabled=position == 0,
-                      on_click=move_song, args=(page_id, -1), width="stretch")
-            down.button("↓ Move down", key=f"down_{page_id}", disabled=position == len(pages) - 1,
-                        on_click=move_song, args=(page_id, 1), width="stretch")
+            st.session_state.setdefault(f"position_{page_id}", position + 1)
+            st.number_input("Song position", min_value=1, max_value=len(pages),
+                            step=1, key=f"position_{page_id}",
+                            on_change=move_song, args=(page_id,))
             if not page["image_urls"]:
                 st.caption("No chord images found. The song's title and notes will still be included.")
             for index, url in enumerate(page["image_urls"]):
@@ -112,3 +113,4 @@ if pages:
     if "pdf_bytes" in st.session_state:
         st.download_button("Download PDF", st.session_state["pdf_bytes"], "setlist.pdf",
                            "application/pdf", on_click="ignore", type="primary", width="stretch")
+
